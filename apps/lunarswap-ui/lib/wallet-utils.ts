@@ -58,6 +58,31 @@ export const detectWalletNetwork = async (
   return null;
 };
 
+
+/**
+ * Resolve a Midnight wallet connector from `window.midnight`.
+ * Lace injects under a UUID key; hardcoding `mnLace` often resolves to undefined.
+ * Prefer the first provider that exposes `enable()`. Keep `mnLace` as a legacy fallback only.
+ * @see https://docs.midnight.network/guides/react-wallet-connect
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const resolveMidnightConnector = (): any | undefined => {
+  const midnight = typeof window !== 'undefined' ? window.midnight : undefined;
+  if (!midnight) return undefined;
+
+  const providers = Object.values(midnight).filter(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (api: any) => api && typeof api.enable === 'function',
+  );
+  if (providers.length > 0) {
+    return providers[0];
+  }
+
+  // Legacy convenience alias (may be undefined when only a UUID key is present).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (midnight as any).mnLace;
+};
+
 /**
  * Connect to the Midnight Lace wallet with proper error handling and timeouts
  */
@@ -72,15 +97,13 @@ export const connectToWallet = async (
     serviceUriTimeout = 5000,
   } = options;
 
-  // Check if Midnight Lace wallet is available
-  const midnight = window.midnight;
-  if (!midnight?.mnLace) {
+  // Enumerate window.midnight — do not hardcode mnLace (UUID injection).
+  const connector = resolveMidnightConnector();
+  if (!connector) {
     throw new Error(
-      'Midnight Lace wallet not found. Please install the extension.',
+      'Midnight wallet not found. Install Lace (or another Midnight wallet), refresh, and ensure it injects under window.midnight.',
     );
   }
-
-  const connector = midnight.mnLace;
 
   // Check if already enabled (optional)
   if (checkExisting) {
